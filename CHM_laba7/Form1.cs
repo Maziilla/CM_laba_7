@@ -105,13 +105,13 @@ namespace SLAU
             int i = 1;
 
             var start_sign = Math.Sign(f(start));
-            strList.Add(string.Format("{0, 2};{1, 10};{2, 10};{3, 10};{4, 15};{5, 15};{6, 15};{7, 10}",
+            strList.Add(string.Format("{0, 2}|{1, 12}|{2, 11}|{3, 10}|{4, 21}|{5, 18}|{6, 10}|{7, 10}",
                 "i", "left", "right", "alpha", "maxKuttaError", "y(1)", "error", "y(1, alpha)-b"));
 
             do
             {
                 string str = "";
-                str += string.Format("{0,2};{0, 10:N7};{0, 10:N7}", i++, start, end);
+                str += string.Format("{0,2}|{1, 12:N7}|{2, 11:N7}|", i++, start, end);
                 //пристрелка
                 mid = (start + end) / 2;
                 var midSign = Math.Sign(f(mid));
@@ -122,10 +122,10 @@ namespace SLAU
                 error = Math.Abs(f(mid));
                 //
                 text = "";
-                RungeKutt_solve(f1, f2, x0, a, mid, 1, RungeEps, ref text, 2);
-                str += string.Format("{0, 10:N7};{0, 15:N7};{0, 15};{0, 10:N7}", mid, text, error, f(mid));
+                y0=RungeKutt_solve(f1, f2, x0, a, mid, 1, RungeEps, ref text, 2);
+                str += string.Format("{0, 10:N7}|{1, 21:N7}|{2, 18}|{3, 10:N7}|{4, 10:N7}", mid, text, y0, error, f(mid));
                 strList.Add(str);
-                SolveBox.Items.Add(str);
+                //SolveBox.Items.Add(str);
             }
             while (error > boundEps);
             strList.Add("Alpha = " + mid);
@@ -151,7 +151,7 @@ namespace SLAU
             if (x == x0)
                 return y0;
             if (Out == 1)
-                strList.Add(string.Format("{0, 7};{1, 12};{2, 12};{3, 12};{4, 16}", "h", "x", "y(x)", "y*(x)", "error"));
+                strList.Add(string.Format("{0, 7};{1, 12};{2, 16};{3, 16};{4, 16}", "h", "x", "y(x)", "y*(x)", "error"));
             do
             {
                 string str = "";
@@ -172,7 +172,7 @@ namespace SLAU
                     zj = next.Item2;
                     if (Out == 1)
                     {
-                        str += string.Format("{0, 12}|{1, 12}|{2, 16}|", yj, _next.Item1, Error);
+                        str += string.Format("{0, 16}|{1, 16}|{2, 16}|", yj, _next.Item1, Error);
                         strList.Add(str);
                     }
                 }
