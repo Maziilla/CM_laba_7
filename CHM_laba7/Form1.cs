@@ -12,9 +12,9 @@ namespace SLAU
             InitializeComponent();
             SolveButton.Enabled = true;
         }
-        public const int a = 1, b = 2;
+        public const double a = 0.0, b = 1.0;
         public  int  N=5; //Размерности
-        public double[] solution,RightPart; //Для решения
+        public double[] solution; //Для решения
         public int[] kol;
         const double E = 1E-8; //Точность
         public double chis;
@@ -134,14 +134,8 @@ namespace SLAU
 
         }
         public double RungeKutt_solve(Func<double, double, double, double> f1,
-            Func<double, double, double, double> f2,
-            double x0,
-            double y0,
-            double z0,
-            double x,
-            double eps,
-            ref string text,
-            int Out)
+            Func<double, double, double, double> f2, double x0, double y0, double z0, double x,
+            double eps, ref string text, int Out)
         {
             var h = 0.1;
             var xj = x0;
@@ -157,9 +151,11 @@ namespace SLAU
                 string str = "";
                 if (h > x - xj)
                     h = x - xj;
+                //Автоматический контроль точности
                 var next = For_RungeKut(f1, f2, xj, yj, zj, h);//Рунге для текущего х и h
                 var next_stage = For_RungeKut(f1, f2, xj, yj, zj, h / 2.0);//Рунге для текущего х и h/2
                 var _next = For_RungeKut(f1, f2, xj + h / 2.0, next_stage.Item1, next_stage.Item2, h / 2.0);//Рунге для х+h/2 и h/2
+                //
                 var Error = Math.Abs(next.Item1 - _next.Item1);
                 if (Error < eps && maxError == double.MinValue)
                     maxError = Error;
@@ -176,7 +172,7 @@ namespace SLAU
                         strList.Add(str);
                     }
                 }
-                else h /= 2;
+                else h /= 2;//к контролю точности
             } while (xj < x);
             if (Out == 1)
                 strList.Add("Max error = " + maxError);
@@ -189,10 +185,7 @@ namespace SLAU
         Tuple<double, double> For_RungeKut(
             Func<double, double, double, double> f1,
             Func<double, double, double, double> f2,
-            double xi,
-            double yi,
-            double zi,
-            double h)
+            double xi, double yi, double zi, double h)
         {
             var m1 = h * f1(xi, yi, zi);
             var k1 = h * f2(xi, yi, zi);
@@ -207,19 +200,190 @@ namespace SLAU
                 yi + 1.0 / 6.0 * (m1 + 2 * m2 + 2 * m3 + m4), //y
                 zi + 1.0 / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4));//z
         }
-
-        public long Factorial(int n)
+//--------------------------------------------------------------------------------------------------
+//Штуки с теплопроводностью       
+        public static double[] progonka(double[,] matrix, double[] rightPart)
         {
-            long temp = 1;
-            for (int i = 1; i <= n; i++)
-                temp *= i;
-            return temp;
+            Func<int, double> a = i => -matrix[i, i - 1];
+            Func<int, double> c = i => matrix[i, i];
+            Func<int, double> b = i => -matrix[i, i + 1];
+            Func<int, double> f = i => rightPart[i];
+            var n = matrix.GetLength(0);
+
+            var alpha = new double[n];
+            var betta = new double[n];
+            alpha[1] = b(0) / c(0);
+            betta[1] = f(0) / c(0);
+
+            for (var i = 1; i < n - 1; i++)
+            {
+                alpha[i + 1] = b(i) / (c(i) - a(i) * alpha[i]);
+                betta[i + 1] = (f(i) + a(i) * betta[i]) / (c(i) - a(i) * alpha[i]);
+            }
+
+            var x = new double[n];
+            x[n - 1] = (f(n - 1) + a(n - 1) * betta[n - 1]) / (c(n - 1) - a(n - 1) * alpha[n - 1]);
+            for (var i = n - 2; i >= 0; i--)
+                x[i] = alpha[i + 1] * x[i + 1] + betta[i + 1];
+            return x;
         }
-       
+        public double Delta(double[] vector,double t, bool Explic)
+        {
+            int n = vector.Length - 1;
+            double h = 1.0 / n,tau;
+            if (Explic)
+                tau = h * h / (4 * 0.1);
+            else
+                tau = h;
+            double max = 0;
+            double temp;
+            for (int j = 0; j < n; j++)
+            {
+                temp = Math.Abs(u(tau * t, j * h) - vector[j]);
+                if (temp > max)
+                    max = temp;
+            }
+            return max;
+        }
+        public void explicit_()
+        {
+            double[] vector = null;
+            double max_Delta = 0;
+            strList.Add("Явный случай");
+            for (int n = 8; n <= 32; n *= 2)
+            {
+                strList.Add("N = " + n);
+                max_Delta = 0;
+                var end = false;
+                for (int i = 0; tn_Ex(n, i) <= 1 || !end; i++)//убрать end
+                {
+                    vector = explicit_scheme(n, i);
+                    var cur_Delta = Delta(vector, i, true);
+                    strList.Add(string.Format("{0,10}|{1,15}",tn_Ex(n,i),cur_Delta));
+                    if (tn_Ex(n, i) > 1)
+                        end = true;
+                    if (cur_Delta > max_Delta)
+                        max_Delta = cur_Delta;
+                }
+                strList.Add("В конечный момент времени: ");
+                for (int i = 0; i < vector.Length; i++)
+                    strList.Add(vector[i].ToString());
+                strList.Add("Максимальная делта = " + max_Delta.ToString());
+            }
+           
+        }
+        public double[] explicit_scheme(int n, int maxi)
+        {
+            double[] Un = new double[n + 1];
+            double h = 1.0 / n;
+            var tau = h * h / (4 * 0.1);
+            for (int i = 0; i < Un.Length; i++)
+            {
+                Un[i] = i * h;//фи
+            }
+            double[] Un_new =(double[]) Un.Clone();
+            for (int i = 0; i < maxi; i++)
+            {
+                for (int j = 1; j < Un.Length - 1; j++)
+                    Un_new[j] = Un[j] + tau * (0.1 * (Un[j + 1] - 2 * Un[j] + Un[j - 1]) / (h * h) + f(tau * i, j * h));
+                Un = (double[])Un_new.Clone();
+            }
+            return Un;
+        }
+        public void implicit_()
+        {
+            double[] vector = null;
+            double max_Delta = 0;
+            strList.Add("Явный случай");
+            for (int n = 8; n <= 32; n *= 2)
+            {
+                strList.Add("N = " + n);
+                max_Delta = 0;
+                for (int i = 0; tn_Im(n, i) <= 1; i++)//убрать end
+                {
+                    vector = implicit_scheme(n, i);
+                    var cur_Delta = Delta(vector, i, false);
+                    strList.Add(string.Format("{0,10}|{1,15}", tn_Im(n, i), cur_Delta));
+                    if (cur_Delta > max_Delta)
+                        max_Delta = cur_Delta;
+                }
+                strList.Add("В конечный момент времени: ");
+                for (int i = 0; i < vector.Length; i++)
+                    strList.Add(vector[i].ToString());
+                strList.Add("Максимальная делта = " + max_Delta.ToString());
+            }
+        }
+        public double[] implicit_scheme(int n, int maxi)
+        {
+            double[] Un = new double[n + 1];
+            double h = 1.0 / n;
+            var tau = h;
+            var d = (tau * 0.1) / (h * h);
+            var matrix = new double[n - 1, n - 1];
+            for (int i = 0; i < matrix.GetLength(0); i++)
+            {
+                if (i - 1 >= 0)
+                    matrix[i, i - 1] = -d;
+                matrix[i, i] = 1 + 2 * d;
+                if (i + 1 < matrix.GetLength(1))
+                    matrix[i, i + 1] = -d;
+            }
+            for (var j = 0; j < Un.Length; j++)
+            {
+                Un[j] = j * h;
+            }
+            Un[0] = a;
+            Un[Un.Length - 1] = b;
+            var rightPart = new double[Un.Length - 2];
+            for (int i = 0; i < maxi; i++)
+            {
+                for (int j = 0; j < rightPart.Length; j++)
+                    rightPart[j] = Un[j + 1] + tau * f(tau * (i + 1), h * (j + 1));
+                rightPart[0] += d * a;
+                rightPart[rightPart.Length - 1] += d * b;
+                rightPart = progonka(matrix, rightPart);
+                for (int j = 0; j < rightPart.Length; j++)
+                    Un[j + 1] = rightPart[j];
+            }
+            return Un;
+        }
+        public double u(double t, double x)
+        {
+            if (rb_13.Checked)
+                return x + 0.1 * t * Math.Sin(Math.PI * x) * 13;
+            return x + 0.1 * t * Math.Sin(Math.PI * x) * 22;
+        }
+        public double f(double t, double x)
+        {
+            return dt_u(x) - 0.1 * dx2_u(t, x);
+        }
+        public double dx2_u(double t, double x)
+        {
+            if (rb_13.Checked)
+                return -1.3 * Math.PI * Math.PI * t * Math.Sin(Math.PI * x);
+            return -2.2 * Math.PI * Math.PI * t * Math.Sin(Math.PI * x);
+        }
+        Func<double, double> fi = x => x;
+        public double dt_u(double x)
+        {
+            if (rb_13.Checked)
+                return 1.3 * Math.Sin(Math.PI * x);
+            return 2.2 * Math.Sin(Math.PI * x);
+        }
+        public double tn_Ex(int n, double i)
+        {
+            return 1.0 / (n * n) / (4.0 * 0.1) * i;
+        }
+        public double tn_Im(int n, double i)
+        {
+            return i * (1.0 / n);
+        }
         //Решение уравнения
         private void SolveButton_Click(object sender, EventArgs e)
         {
-            RungeKutt();
+            //RungeKutt();
+            //explicit_();
+            implicit_();
             SaveFile();
         }
 
